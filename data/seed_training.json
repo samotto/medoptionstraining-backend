@@ -1,0 +1,10 @@
+{
+  "lessons": [
+    {"lesson_title": "Welcome to Med Options", "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ", "description": "Replace this placeholder with the company welcome video."},
+    {"lesson_title": "Patient Privacy and HIPAA", "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ", "description": "Introduction to patient privacy responsibilities."},
+    {"lesson_title": "Medication Safety Basics", "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ", "description": "Core medication handling and safety practices."}
+  ],
+  "courses": [
+    {"course_title": "New Employee Orientation", "description": "Required orientation for new Med Options employees.", "lessons": ["Welcome to Med Options", "Patient Privacy and HIPAA", "Medication Safety Basics"]}
+  ]
+}
