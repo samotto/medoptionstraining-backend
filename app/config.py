@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     email_from: str = "Med Options Training <onboarding@resend.dev>"
     frontend_url: str = "http://localhost:5173"
     email_verification_minutes: int = 60
+    password_reset_minutes: int = 30
     app_timezone: str = "America/Chicago"
 
     @property

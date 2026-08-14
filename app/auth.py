@@ -1,4 +1,6 @@
 from datetime import datetime, timedelta, timezone
+from hashlib import sha256
+from hmac import compare_digest
 
 from fastapi import Cookie, Depends, HTTPException, status
 from jose import JWTError, jwt
@@ -54,6 +56,42 @@ def decode_email_verification_token(token: str) -> tuple[int, str]:
             detail="The verification link is invalid or has expired",
         ) from exc
     return user_id, email
+
+
+def _password_version(password_hash: str | None) -> str:
+    return sha256((password_hash or "").encode("utf-8")).hexdigest()
+
+
+def create_password_reset_token(user_id: int, email: str, password_hash: str | None) -> str:
+    expire = datetime.now(timezone.utc) + timedelta(minutes=settings.password_reset_minutes)
+    payload = {
+        "sub": str(user_id),
+        "email": email,
+        "password_version": _password_version(password_hash),
+        "purpose": "reset_password",
+        "exp": expire,
+    }
+    return jwt.encode(payload, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
+
+
+def decode_password_reset_token(token: str) -> tuple[int, str, str]:
+    try:
+        payload = jwt.decode(token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm])
+        if payload.get("purpose") != "reset_password":
+            raise JWTError("Incorrect token purpose")
+        user_id = int(payload["sub"])
+        email = str(payload["email"]).strip().lower()
+        password_version = str(payload["password_version"])
+    except (JWTError, KeyError, TypeError, ValueError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="The password reset link is invalid or has expired",
+        ) from exc
+    return user_id, email, password_version
+
+
+def password_reset_token_matches(password_version: str, password_hash: str | None) -> bool:
+    return compare_digest(password_version, _password_version(password_hash))
 
 
 def decode_access_token(token: str) -> str:

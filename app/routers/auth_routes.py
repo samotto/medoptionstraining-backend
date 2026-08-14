@@ -7,17 +7,22 @@ from sqlalchemy.orm import Session
 from app.auth import (
     create_access_token,
     create_email_verification_token,
+    create_password_reset_token,
+    decode_password_reset_token,
     decode_email_verification_token,
     get_current_user,
     hash_password,
+    password_reset_token_matches,
     verify_password,
 )
 from app.config import get_settings
 from app.database import get_db
-from app.email_service import EmailDeliveryError, send_verification_email
+from app.email_service import EmailDeliveryError, send_password_reset_email, send_verification_email
 from app.models import User
 from app.schemas import (
     EmailVerificationRequest,
+    CompletePasswordResetRequest,
+    ForgotPasswordRequest,
     LoginRequest,
     MessageResponse,
     RegistrationResponse,
@@ -141,6 +146,49 @@ def resend_verification(
                 detail="The verification email could not be sent. Please try again.",
             ) from exc
     return MessageResponse(message="If this account is pending, a verification email has been sent")
+
+
+@router.post("/forgot-password", response_model=MessageResponse)
+def forgot_password(
+    payload: ForgotPasswordRequest,
+    db: Session = Depends(get_db),
+) -> MessageResponse:
+    email = str(payload.email).strip().lower()
+    user = db.query(User).filter(func.lower(User.email) == email).first()
+    if user:
+        token = create_password_reset_token(user.id, user.email, user.password_hash)
+        try:
+            send_password_reset_email(user.email, token)
+        except EmailDeliveryError:
+            # Preserve the same response for known and unknown email addresses.
+            pass
+    return MessageResponse(message="If an account exists for this email, a password reset link has been sent")
+
+
+@router.post("/reset-password", response_model=MessageResponse)
+def complete_password_reset(
+    payload: CompletePasswordResetRequest,
+    db: Session = Depends(get_db),
+) -> MessageResponse:
+    user_id, token_email, password_version = decode_password_reset_token(payload.token)
+    user = db.query(User).filter(User.id == user_id).first()
+    if (
+        not user
+        or user.email.strip().lower() != token_email
+        or not password_reset_token_matches(password_version, user.password_hash)
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="The password reset link is invalid or has expired",
+        )
+
+    now = datetime.now(timezone.utc)
+    user.password_hash = hash_password(payload.new_password)
+    user.update_time = now
+    user.update_id = user.id
+    db.add(user)
+    db.commit()
+    return MessageResponse(message="Password updated")
 
 
 @router.post("/logout", response_model=MessageResponse)
