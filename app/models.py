@@ -95,7 +95,7 @@ class UserCourse(Base):
 
 
 class LessonCompletion(Base):
-    __tablename__ = "lesson_completions"
+    __tablename__ = "user_courses_lessons"
     __table_args__ = (UniqueConstraint("user_id", "course_id", "lesson_id", name="uq_lesson_completion"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)

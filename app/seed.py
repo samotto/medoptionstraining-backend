@@ -185,7 +185,7 @@ def seed_db_tables_lookup_list(db: Session, admin_user: User) -> int:
         db.flush()
 
     inserted_count = 0
-    for table_name in ("course_lessons", "courses", "lesson_completions", "lessons", "lookup_list_items", "lookup_lists", "user_courses", "users"):
+    for table_name in ("course_lessons", "courses", "lessons", "lookup_list_items", "lookup_lists", "user_courses", "user_courses_lessons", "users"):
         existing = (
             db.query(LookupListItem)
             .filter(

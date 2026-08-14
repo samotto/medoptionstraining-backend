@@ -38,12 +38,10 @@ def get_lesson_or_404(db: Session, lesson_id: int) -> Lesson:
 @router.get("/courses", response_model=list[CourseDetailResponse])
 def list_courses(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     courses = db.query(Course).order_by(func.lower(Course.course_title)).all()
-    assigned_ids = set()
-    completed = set()
+    assigned_ids = {row.course_id for row in db.query(UserCourse).filter(UserCourse.user_id == current_user.id)}
+    completed = {(row.course_id, row.lesson_id) for row in db.query(LessonCompletion).filter(LessonCompletion.user_id == current_user.id)}
     if current_user.role != "Admin":
-        assigned_ids = {row.course_id for row in db.query(UserCourse).filter(UserCourse.user_id == current_user.id)}
         courses = [course for course in courses if course.id in assigned_ids]
-        completed = {(row.course_id, row.lesson_id) for row in db.query(LessonCompletion).filter(LessonCompletion.user_id == current_user.id)}
     results = []
     for course in courses:
         rows = (
@@ -147,15 +145,19 @@ def user_courses(user_id: int, db: Session = Depends(get_db), current_user: User
     if not db.get(User, user_id): raise HTTPException(status_code=404, detail="User not found")
     # Reuse the same response shape while explicitly querying the requested user.
     assignments = db.query(UserCourse).filter(UserCourse.user_id == user_id).all()
-    completed = {(r.course_id, r.lesson_id) for r in db.query(LessonCompletion).filter(LessonCompletion.user_id == user_id)}
+    completion_rows = db.query(LessonCompletion).filter(LessonCompletion.user_id == user_id).all()
+    completed = {(r.course_id, r.lesson_id) for r in completion_rows}
+    completion_times = {(r.course_id, r.lesson_id): r.completion_time for r in completion_rows}
     output = []
     for assignment in assignments:
         course = get_course_or_404(db, assignment.course_id)
         rows = db.query(CourseLesson, Lesson).join(Lesson).filter(CourseLesson.course_id == course.id).order_by(CourseLesson.sequence).all()
         lessons = [LessonSummary(id=l.id, lesson_title=l.lesson_title, url=l.url, description=l.description, sequence=cl.sequence,
-                                 completed=(course.id, l.id) in completed) for cl, l in rows]
+                                 completed=(course.id, l.id) in completed, completion_time=completion_times.get((course.id, l.id))) for cl, l in rows]
+        completed_count = sum(x.completed for x in lessons)
+        course_completion_time = max((completion_times[(course.id, lesson.id)] for lesson in lessons if lesson.completed), default=None) if lessons and completed_count == len(lessons) else None
         output.append(CourseDetailResponse(**CourseResponse.model_validate(course).model_dump(), lessons=lessons, assigned=True,
-                                           completed_lessons=sum(x.completed for x in lessons), total_lessons=len(lessons)))
+                                           completed_lessons=completed_count, total_lessons=len(lessons), completion_time=course_completion_time))
     return output
 
 
@@ -190,3 +192,12 @@ def complete_lesson(user_id: int, course_id: int, lesson_id: int, db: Session = 
     else:
         row.completion_time=now; row.update_time=now; row.update_id=current_user.id
     db.commit(); return LessonCompletionResponse(user_id=user_id, course_id=course_id, lesson_id=lesson_id, completion_time=now)
+
+
+@router.delete("/users/{user_id}/courses/{course_id}/lessons/{lesson_id}/completion", response_model=MessageResponse)
+def uncomplete_lesson(user_id: int, course_id: int, lesson_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    if current_user.role != "Admin" and current_user.id != user_id: raise HTTPException(status_code=403, detail="Access denied")
+    row = db.query(LessonCompletion).filter_by(user_id=user_id, course_id=course_id, lesson_id=lesson_id).first()
+    if row:
+        db.delete(row); db.commit()
+    return MessageResponse(message="lesson completion removed")

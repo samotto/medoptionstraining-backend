@@ -98,6 +98,7 @@ class LessonSummary(BaseModel):
     description: str | None
     sequence: int
     completed: bool = False
+    completion_time: datetime | None = None
 
 
 class CourseBase(BaseModel):
@@ -128,6 +129,7 @@ class CourseDetailResponse(CourseResponse):
     assigned: bool = False
     completed_lessons: int = 0
     total_lessons: int = 0
+    completion_time: datetime | None = None
 
 
 class LessonBase(BaseModel):

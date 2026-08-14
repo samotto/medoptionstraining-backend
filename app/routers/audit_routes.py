@@ -24,7 +24,7 @@ AUDIT_MODELS = {
     "lessons": Lesson,
     "course_lessons": CourseLesson,
     "user_courses": UserCourse,
-    "lesson_completions": LessonCompletion,
+    "user_courses_lessons": LessonCompletion,
     "users": User,
 }
 
