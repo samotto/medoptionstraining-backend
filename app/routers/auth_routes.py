@@ -105,12 +105,12 @@ def register(payload: RegisterRequest, db: Session = Depends(get_db)) -> Registr
     return RegistrationResponse(message="Verification email sent", email=user.email)
 
 
-@router.post("/verify-email", response_model=UserLoginResponse)
+@router.post("/verify-email", response_model=MessageResponse)
 def verify_email(
     payload: EmailVerificationRequest,
     response: Response,
     db: Session = Depends(get_db),
-) -> UserLoginResponse:
+) -> MessageResponse:
     user_id, token_email = decode_email_verification_token(payload.token)
     user = db.query(User).filter(User.id == user_id).first()
     if not user or user.email.strip().lower() != token_email:
@@ -119,14 +119,17 @@ def verify_email(
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="This email address is already verified")
 
     user.role = "Basic"
-    user.last_logon_time = datetime.now(timezone.utc)
-    user.update_time = user.last_logon_time
+    user.update_time = datetime.now(timezone.utc)
     user.update_id = user.id
     db.add(user)
     db.commit()
-    db.refresh(user)
-    set_auth_cookie(response, user.id)
-    return UserLoginResponse.model_validate(user)
+    response.delete_cookie(
+        key="access_token",
+        path="/",
+        secure=settings.cookie_secure,
+        samesite=settings.cookie_samesite,
+    )
+    return MessageResponse(message="Email verified. Please log in.")
 
 
 @router.post("/resend-verification", response_model=MessageResponse)
