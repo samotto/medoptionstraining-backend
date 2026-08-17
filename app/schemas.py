@@ -139,6 +139,8 @@ class CourseDetailResponse(CourseResponse):
     completed_lessons: int = 0
     total_lessons: int = 0
     completion_time: datetime | None = None
+    assigned_employees: int = 0
+    completed_employees: int = 0
 
 
 class LessonBase(BaseModel):

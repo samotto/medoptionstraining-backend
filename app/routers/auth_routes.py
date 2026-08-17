@@ -57,7 +57,10 @@ def login(payload: LoginRequest, response: Response, db: Session = Depends(get_d
     if not user or not verify_password(payload.password, user.password_hash):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password")
     if user.role == "Pending":
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Email address has not been verified")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Email address has not been verified. Please check your email",
+        )
 
     user.last_logon_time = datetime.now(timezone.utc)
     db.add(user)

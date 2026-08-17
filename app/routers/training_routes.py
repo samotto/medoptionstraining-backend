@@ -40,6 +40,13 @@ def list_courses(db: Session = Depends(get_db), current_user: User = Depends(get
     courses = db.query(Course).order_by(func.lower(Course.course_title)).all()
     assigned_ids = {row.course_id for row in db.query(UserCourse).filter(UserCourse.user_id == current_user.id)}
     completed = {(row.course_id, row.lesson_id) for row in db.query(LessonCompletion).filter(LessonCompletion.user_id == current_user.id)}
+    assignment_users: dict[int, set[int]] = {}
+    completion_lessons: dict[tuple[int, int], set[int]] = {}
+    if current_user.role == "Admin":
+        for assignment in db.query(UserCourse).all():
+            assignment_users.setdefault(assignment.course_id, set()).add(assignment.user_id)
+        for completion in db.query(LessonCompletion).all():
+            completion_lessons.setdefault((completion.course_id, completion.user_id), set()).add(completion.lesson_id)
     if current_user.role != "Admin":
         courses = [course for course in courses if course.id in assigned_ids]
     results = []
@@ -53,9 +60,20 @@ def list_courses(db: Session = Depends(get_db), current_user: User = Depends(get
         )
         lessons = [LessonSummary(id=l.id, lesson_title=l.lesson_title, url=l.url, description=l.description,
                                  sequence=cl.sequence, completed=(course.id, l.id) in completed) for cl, l in rows]
+        assigned_users = assignment_users.get(course.id, set())
+        course_lesson_ids = {lesson.id for lesson in lessons}
+        completed_employees = (
+            sum(
+                course_lesson_ids.issubset(completion_lessons.get((course.id, user_id), set()))
+                for user_id in assigned_users
+            )
+            if course_lesson_ids
+            else 0
+        )
         base = CourseResponse.model_validate(course).model_dump()
         results.append(CourseDetailResponse(**base, lessons=lessons, assigned=course.id in assigned_ids,
-                                            completed_lessons=sum(item.completed for item in lessons), total_lessons=len(lessons)))
+                                            completed_lessons=sum(item.completed for item in lessons), total_lessons=len(lessons),
+                                            assigned_employees=len(assigned_users), completed_employees=completed_employees))
     return results
 
 
